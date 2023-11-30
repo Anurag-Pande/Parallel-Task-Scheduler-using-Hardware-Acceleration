@@ -1,0 +1,154 @@
+'''import time
+from numba import cuda, njit
+import numpy as np
+
+# Sequential function to count words
+@njit
+def sequential_word_count(text):
+    word_count = 0
+    in_word = False
+
+    for char in text:
+        # Check if the character is an alphanumeric character
+        if ('0' <= char <= '9') or ('A' <= char <= 'Z') or ('a' <= char <= 'z'):
+            in_word = True
+        else:
+            if in_word:
+                word_count += 1
+                in_word = False
+
+    if in_word:
+        word_count += 1
+
+    return word_count
+
+# CUDA kernel for sequential word count (essentially running on a single thread)
+@cuda.jit
+def cuda_sequential_word_count(chars, result):
+    word_count = 0
+    in_word = False
+
+    for i in range(chars.shape[0]):
+        char = chars[i]
+        # Check if the character is an alphanumeric character
+        if ('0' <= char <= '9') or ('A' <= char <= 'Z') or ('a' <= char <= 'z'):
+            in_word = True
+        else:
+            if in_word:
+                word_count += 1
+                in_word = False
+
+    if in_word:
+        word_count += 1
+
+    # Store the result in the output array
+    result[0] = word_count
+
+# Example usage:
+text = """This is a sample sentence. 
+It has words, spaces, and punctuation.""" * 1000  # Replicate for larger input
+
+# Convert text to a Numpy array of characters
+text_array = np.array(list(text), dtype=np.str_)
+
+# Allocate result array on the host
+result_host = np.zeros(1, dtype=np.int32)
+
+# Allocate and copy data to the device
+text_device = cuda.to_device(text_array)
+result_device = cuda.to_device(result_host)
+
+# Measure execution time for sequential word count
+start_time_sequential_cuda = time.time()
+
+# Launch the CUDA kernel (essentially running on a single thread)
+cuda_sequential_word_count[1, 1](text_device, result_device)
+
+# Copy the result back to the host
+cuda.synchronize()
+result_device.copy_to_host(result_host)
+
+end_time_sequential_cuda = time.time()
+
+print(f"Sequential CUDA Word Count: {result_host[0]}")
+print(f"Sequential CUDA Execution Time: {end_time_sequential_cuda - start_time_sequential_cuda:.6f} seconds")
+'''
+import time
+from numba import cuda, njit
+import numpy as np
+
+# Sequential function to count words
+@njit
+def sequential_word_count(text):
+    word_count = 0
+    in_word = False
+
+    for char in text:
+        # Check if the character is an alphanumeric character
+        if ('0' <= char <= '9') or ('A' <= char <= 'Z') or ('a' <= char <= 'z'):
+            in_word = True
+        else:
+            if in_word:
+                word_count += 1
+                in_word = False
+
+    if in_word:
+        word_count += 1
+
+    return word_count
+
+# CUDA kernel for sequential word count (essentially running on a single thread)
+@cuda.jit
+def cuda_sequential_word_count(chars, result):
+    word_count = 0
+    in_word = False
+
+    for i in range(chars.shape[0]):
+        char = chars[i]
+        # Check if the character is an alphanumeric character
+        if ('0' <= char <= '9') or ('A' <= char <= 'Z') or ('a' <= char <= 'z'):
+            in_word = True
+        else:
+            if in_word:
+                word_count += 1
+                in_word = False
+
+    if in_word:
+        word_count += 1
+
+    # Store the result in the output array
+    result[0] = word_count
+
+# Example usage:
+text = """This is a sample sentence. 
+It has words, spaces, and punctuation asd asd asd
+asd asd asd asd asd asd asd asd asd asd asd asd asd asd asd asd asd asd asd asd asd asd asd asd 
+ asd asd asd asd asd asd asd asd asd asd asd asd asd .""" * 1000  # Replicate for larger input
+
+# Convert text to a Numpy array of characters
+text_array = np.array(list(text), dtype=np.str_)
+
+# Allocate result array on the host
+result_host = np.zeros(1, dtype=np.int32)
+
+# Allocate and copy data to the device
+text_device = cuda.to_device(text_array)
+result_device = cuda.to_device(result_host)
+
+# Increase grid size for better GPU utilization
+grid_size = (text_array.size + 127) // 128  # Assuming 128 threads per block
+
+# Measure execution time for sequential word count
+start_time_sequential_cuda = time.time()
+
+# Launch the CUDA kernel (essentially running on a single thread)
+cuda_sequential_word_count[grid_size, 128](text_device, result_device)
+
+# Copy the result back to the host
+cuda.synchronize()
+result_device.copy_to_host(result_host)
+
+end_time_sequential_cuda = time.time()
+
+print(f"Sequential CUDA Word Count: {result_host[0]}")
+print(f"Sequential CUDA Execution Time: {end_time_sequential_cuda - start_time_sequential_cuda:.6f} seconds")

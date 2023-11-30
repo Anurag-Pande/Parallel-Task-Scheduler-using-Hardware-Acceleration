@@ -1,0 +1,225 @@
+'''from numba import cuda, njit
+import numpy as np
+
+import time
+
+# CUDA kernel for word count
+@cuda.jit
+def word_count_kernel(chars, result):
+    thread_id = cuda.grid(1)
+    stride = cuda.gridsize(1)
+
+    word_count = 0
+    in_word = False
+
+    for i in range(thread_id, len(chars), stride):
+        char = chars[i]
+        # Check if the ASCII value corresponds to an alphanumeric character
+        if 48 <= char <= 57 or 65 <= char <= 90 or 97 <= char <= 122:
+            in_word = True
+        else:
+            if in_word:
+                word_count += 1
+                in_word = False
+
+    if in_word:
+        word_count += 1
+
+    # Reduction to get the total word count
+    cuda.atomic.add(result, 0, word_count)
+
+# Function to count words using CUDA
+def parallel_word_count(text):
+    # Convert text to a Numpy array of characters and compute ASCII values
+    text_array = np.array(list(text), dtype=np.str_)
+    ascii_values = np.array([ord(char) for char in text_array], dtype=np.int32)
+
+    # Allocate result array on the host
+    result_host = np.zeros(1, dtype=np.int32)
+
+    # Allocate and copy data to the device
+    ascii_device = cuda.to_device(ascii_values)
+    result_device = cuda.to_device(result_host)
+
+    # Configure the grid and block dimensions
+    threads_per_block = 128
+    blocks_per_grid = (len(text) + threads_per_block - 1) // threads_per_block
+
+    # Launch the CUDA kernel
+    word_count_kernel[blocks_per_grid, threads_per_block](ascii_device, result_device)
+
+    # Copy the result back to the host
+    cuda.synchronize()
+    result_device.copy_to_host(result_host)
+
+    return result_host[0]
+
+# Example usage:
+text = """This is a sample sentence. 
+It has words, spaces, and punctuation.""" * 1000  # Replicate for larger input
+
+# Perform word count using CUDA
+
+start = time.time()
+result_parallel = parallel_word_count(text)
+
+print(f"Parallel Word Count: {result_parallel}")
+end = time.time()
+
+elapsed_time = end - start
+print("TIME: ",elapsed_time)'''
+
+###############################################################################
+
+'''import time
+from numba import cuda, njit
+import numpy as np
+
+# CUDA kernel for parallel word count
+@cuda.jit
+def parallel_word_count_kernel(chars, result):
+    thread_id = cuda.grid(1)
+    stride = cuda.gridsize(1)
+
+    local_word_count = 0
+    in_word = False
+
+    for i in range(thread_id, len(chars), stride):
+        char = chars[i]
+        # Check if the character is an alphanumeric character using character codes
+        if (48 <= char <= 57) or (65 <= char <= 90) or (97 <= char <= 122):
+            in_word = True
+        else:
+            if in_word:
+                local_word_count += 1
+                in_word = False
+
+    if in_word:
+        local_word_count += 1
+
+    # Reduction to get the total word count
+    cuda.atomic.add(result, 0, local_word_count)
+
+# Function to count words using CUDA
+def parallel_word_count(text):
+    # Convert text to a Numpy array of characters and compute ASCII values
+    text_array = np.array(list(text), dtype=np.str_)
+    ascii_values = np.array([ord(char) for char in text_array], dtype=np.int32)
+
+    # Allocate result array on the host
+    result_host = np.zeros(1, dtype=np.int32)
+
+    # Allocate and copy data to the device
+    ascii_device = cuda.to_device(ascii_values)
+    result_device = cuda.to_device(result_host)
+
+    # Configure the grid and block dimensions
+    threads_per_block = 128
+    blocks_per_grid = (len(text) + threads_per_block - 1) // threads_per_block
+
+    # Measure execution time for parallel word count
+    start_time = time.time()
+
+    # Launch the CUDA kernel
+    parallel_word_count_kernel[blocks_per_grid, threads_per_block](ascii_device, result_device)
+
+    # Copy the result back to the host
+    cuda.synchronize()
+    result_device.copy_to_host(result_host)
+
+    end_time = time.time()
+
+    return result_host[0], end_time - start_time
+
+# Example usage:
+text = """This is a sample sentence. 
+It has words, spaces, and punctuation.""" * 10000  # Replicate for larger input
+
+# Perform parallel word count
+result_parallel, execution_time = parallel_word_count(text)
+print(f"Parallel Word Count: {result_parallel}")
+print(f"Execution Time: {execution_time:.6f} seconds")'''
+
+
+import time
+from numba import cuda, njit
+import numpy as np
+
+# CUDA kernel for parallel word count with shared memory
+@cuda.jit
+def parallel_word_count_kernel(chars, result):
+    tid = cuda.threadIdx.x + cuda.blockDim.x * cuda.blockIdx.x
+    stride = cuda.gridDim.x * cuda.blockDim.x
+
+    local_word_count = 0
+    in_word = False
+
+    for i in range(tid, len(chars), stride):
+        char = chars[i]
+        # Check if the character is an alphanumeric character using character codes
+        if (48 <= char <= 57) or (65 <= char <= 90) or (97 <= char <= 122):
+            in_word = True
+        else:
+            if in_word:
+                local_word_count += 1
+                in_word = False
+
+    if in_word:
+        local_word_count += 1
+
+    # Shared memory for local counts
+    local_counts = cuda.shared.array(128, dtype=np.int32)
+    local_counts[cuda.threadIdx.x] = local_word_count
+    cuda.syncthreads()
+
+    # Parallel reduction within a block
+    s = cuda.blockDim.x // 2
+    while s > 0:
+        if cuda.threadIdx.x < s:
+            local_counts[cuda.threadIdx.x] += local_counts[cuda.threadIdx.x + s]
+        cuda.syncthreads()
+        s //= 2
+
+    # Store the result in global memory using atomic add
+    if cuda.threadIdx.x == 0:
+        cuda.atomic.add(result, 0, local_counts[0])
+
+# Function to count words using CUDA
+def parallel_word_count(text):
+    # Convert text to a Numpy array of characters and compute ASCII values
+    text_array = np.array(list(text), dtype=np.str_)
+    ascii_values = np.array([ord(char) for char in text_array], dtype=np.int32)
+
+    # Allocate result array on the host
+    result_host = np.zeros(1, dtype=np.int32)
+
+    # Allocate and copy data to the device
+    ascii_device = cuda.to_device(ascii_values)
+    result_device = cuda.to_device(result_host)
+
+    # Configure the grid and block dimensions
+    threads_per_block = 128
+    blocks_per_grid = (len(text) + threads_per_block - 1) // threads_per_block
+
+    # Measure execution time for parallel word count
+    start_time = time.time()
+
+    # Launch the CUDA kernel
+    parallel_word_count_kernel[blocks_per_grid, threads_per_block](ascii_device, result_device)
+
+    # Copy the result back to the host
+    cuda.synchronize()
+    result_device.copy_to_host(result_host)
+
+    end_time = time.time()
+
+    return result_host[0], end_time - start_time
+
+# Example usage:
+text = """This is a sample sentence. 
+It has words, spaces, and punctuation.""" * 10000  # Replicate for larger input
+
+# Perform parallel word count
+result_parallel, execution_time = parallel_word_count(text)
+print(f"Parallel Word Count: {result_parallel}")
+print(f"Execution Time: {execution_time:.6f} seconds")

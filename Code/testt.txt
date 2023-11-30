@@ -1,0 +1,20 @@
+import tensorflow as tf
+import numpy as np
+
+# Generate two random matrices
+matrix_size = 1000  # Adjust the matrix size as needed
+matrix_a = np.random.rand(matrix_size, matrix_size).astype(np.float32)
+matrix_b = np.random.rand(matrix_size, matrix_size).astype(np.float32)
+
+# Define a TensorFlow session
+with tf.device("/GPU:0"):  # Use the first available GPU
+    a = tf.constant(matrix_a)
+    b = tf.constant(matrix_b)
+    result = tf.matmul(a, b)
+
+# Start a TensorFlow session
+with tf.Session() as sess:
+    multiplied_matrix = sess.run(result)
+
+print("Matrix multiplication result:")
+print(multiplied_matrix)
